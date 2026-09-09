@@ -1,4 +1,10 @@
 require("dotenv").config();
+process.env.NODE_ENV = "test";
+process.env.DEV_LOGIN_ENABLED = "true";
+process.env.DATABASE_URL = process.env.DATABASE_URL || "mysql://store_user:store_password@localhost:3306/university_store";
+process.env.JWT_SECRET = process.env.JWT_SECRET || "uortIejaqfwWZYWtmXgmHIMPHMNw4xBSF4O6v/fJLYTvuUSuqgUtELGfIi7+DLBn";
+process.env.EXPOSED_PEER_API_KEY = process.env.EXPOSED_PEER_API_KEY || "0c0bf00270a2bea199aac7c205c0567f6a4a307f0cb6d934ec7690319e9443df";
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const request = require("supertest");
@@ -7,8 +13,8 @@ const { createApp } = require("../src/app");
 const prisma = require("../src/db");
 
 const app = createApp();
-const JWT_SECRET = process.env.JWT_SECRET || "uortIejaqfwWZYWtmXgmHIMPHMNw4xBSF4O6v/fJLYTvuUSuqgUtELGfIi7+DLBn";
-const PEER_KEY = process.env.EXPOSED_PEER_API_KEY || "0c0bf00270a2bea199aac7c205c0567f6a4a307f0cb6d934ec7690319e9443df";
+const JWT_SECRET = process.env.JWT_SECRET;
+const PEER_KEY = process.env.EXPOSED_PEER_API_KEY;
 
 function makeToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: "1h", algorithm: "HS256" });

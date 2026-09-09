@@ -1,7 +1,8 @@
+require("dotenv").config();
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL = "mysql://x:x@localhost:3306/x";
-process.env.JWT_SECRET = "test-secret-that-is-longer-than-32-characters";
-process.env.EXPOSED_PEER_API_KEY = "test-peer-key-long-enough";
+process.env.DATABASE_URL = process.env.DATABASE_URL || "mysql://store_user:store_password@localhost:3306/university_store";
+process.env.JWT_SECRET = process.env.JWT_SECRET || "test-secret-that-is-longer-than-32-characters";
+process.env.EXPOSED_PEER_API_KEY = process.env.EXPOSED_PEER_API_KEY || "test-peer-key-long-enough";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const request = require("supertest");

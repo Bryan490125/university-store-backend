@@ -5,35 +5,25 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_DATABASE: university_store
-          MYSQL_USER: store_user
-          MYSQL_PASSWORD: store_password
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npx prisma generate
-      - run: npx prisma db push
-        env:
-          DATABASE_URL: mysql://store_user:store_password@127.0.0.1:3306/university_store
-      - run: node prisma/seed.js
-        env:
-          DATABASE_URL: mysql://store_user:store_password@127.0.0.1:3306/university_store
-      - run: npm run check
-      - run: npm test
-        env:
-          NODE_ENV: test
-          DATABASE_URL: mysql://store_user:store_password@127.0.0.1:3306/university_store
-          JWT_SECRET: test-secret-that-is-longer-than-32-characters
-          EXPOSED_PEER_API_KEY: test-peer-key-long-enough
+      - name: Start Database
+        run: docker compose up -d --wait db
+      - name: Prepare environment
+        run: cp .env.example .env
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Migrate and seed database
+        run: |
+          npx prisma db push
+          node prisma/seed.js
+      - name: Syntax check
+        run: npm run check
+      - name: Run tests
+        run: npm test
