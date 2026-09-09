@@ -1,0 +1,28 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: university_store
+      MYSQL_USER: store_user
+      MYSQL_PASSWORD: store_password
+      MYSQL_ROOT_PASSWORD: local_root_password
+    volumes: ["store_db:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports: ["3306:3306"]
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: mysql://store_user:store_password@db:3306/university_store
+    depends_on:
+      db: { condition: service_healthy }
+    command: ["sh", "-c", "npx prisma db push && node prisma/seed.js && node src/server.js"]
+    ports: ["3000:3000"]
+volumes:
+  store_db:

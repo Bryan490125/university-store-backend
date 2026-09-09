@@ -1,0 +1,12 @@
+process.env.NODE_ENV = "test";
+process.env.DATABASE_URL = "mysql://x:x@localhost:3306/x";
+process.env.JWT_SECRET = "test-secret-that-is-longer-than-32-characters";
+process.env.EXPOSED_PEER_API_KEY = "test-peer-key-long-enough";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const request = require("supertest");
+const { createApp } = require("../src/app");
+test("GET health returns ok", async () => { const r = await request(createApp()).get("/store/api/health"); assert.equal(r.status, 200); assert.equal(r.body.status, "ok"); });
+test("unknown route returns 404", async () => { const r = await request(createApp()).get("/wrong"); assert.equal(r.status, 404); });
+test("API documentation is available", async () => { const r = await request(createApp()).get("/store/api/openapi.json"); assert.equal(r.status, 200); assert.equal(r.body.info.title, "University Merchandise Store API"); });
+test("protected cart rejects missing token", async () => { const r = await request(createApp()).get("/store/api/cart"); assert.equal(r.status, 401); });
