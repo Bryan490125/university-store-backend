@@ -16,6 +16,7 @@ Prepared for the Backend Application project by Phone Maung (6632110), Nyi Min H
 - Interactive Swagger UI at `/store/api/docs`
 - Admin user roles and summary reports
 - Runtime Azure Key Vault secret loading with managed identity
+- Production UI served by Nginx at the site root, with the API at `/store/api`
 
 ## Run locally
 
@@ -26,7 +27,7 @@ Prepared for the Backend Application project by Phone Maung (6632110), Nyi Min H
 5. Start: `npm run dev`.
 6. Test `http://localhost:3000/store/api/health`.
 
-Demo accounts use password `Demo123!`: `student@university.edu`, `staff@university.edu`, and `admin@university.edu`. Development login is automatically unavailable when `NODE_ENV=production`.
+The frontend uses role buttons for the controlled classroom/demo flow, so users do not enter email addresses or passwords. Set `ROLE_LOGIN_ENABLED=true` on the API and seed the database before using those buttons. This mode identifies the first configured user for each role and is not suitable for an internet-facing production system; use Microsoft Entra ID for real deployment.
 
 ## Production checklist
 
@@ -39,6 +40,16 @@ Demo accounts use password `Demo123!`: `student@university.edu`, `staff@universi
 7. Use Certbot on the real domain. Do not request a certificate for an IP address.
 8. Configure the partner API URL and exchange different inbound/outbound API keys securely.
 9. Run `npm test`, demonstrate all three roles, and capture screenshots/logs for the report.
+
+## VPS URLs
+
+After pointing your domain to the VPS and configuring HTTPS in Nginx:
+
+- UI: `https://your-domain.example/`
+- API health: `https://your-domain.example/store/api/health`
+- API docs: `https://your-domain.example/store/api/docs`
+
+Build the frontend with `VITE_API_URL=https://your-domain.example/store/api npm run build` from `frontend/`, then copy `frontend/dist` to `/var/www/university-store-frontend/dist`. Set `CORS_ORIGIN=https://your-domain.example` in the API environment.
 
 ## Important limits
 

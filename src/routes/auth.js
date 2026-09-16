@@ -18,10 +18,23 @@ router.post("/dev-login", async (req, res, next) => {
 
 router.get("/me", authenticate, async (req, res, next) => {
   try {
-    let user = await prisma.user.findFirst({ where: { OR: [{ id: Number(req.auth.sub) || -1 }, { azureId: req.auth.oid || "none" }, { email: req.auth.email || req.auth.preferred_username || "none" }] } });
-    if (!user && req.auth.oid) user = await prisma.user.create({ data: { azureId: req.auth.oid, email: req.auth.preferred_username, name: req.auth.name || "University User" } });
+    let user;
+    if (req.auth.oid) {
+      user = await prisma.user.findUnique({ where: { azureId: req.auth.oid } });
+      if (!user) {
+        const email = (req.auth.preferred_username || req.auth.email || "").trim().toLowerCase();
+        if (!email) return res.status(400).json({ error: "University account has no email address" });
+        user = await prisma.user.create({ data: {
+          azureId: req.auth.oid, email,
+          name: req.auth.name || "University User"
+        } });
+      }
+    } else {
+      const id = Number(req.auth.sub);
+      if (Number.isInteger(id) && id > 0) user = await prisma.user.findUnique({ where: { id } });
+    }
     if (!user) return res.status(404).json({ error: "User not registered" });
-    res.json(user);
+    res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   } catch (e) { next(e); }
 });
 module.exports = router;

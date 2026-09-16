@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import './App.css';
+import { microsoftEnabled, getMicrosoftToken, loginWithMicrosoft, logoutMicrosoft } from './microsoftAuth';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/store/api';
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3000/store/api' : '/store/api');
+const REQUESTED_ROLE_KEY = 'storeRequestedRole';
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(Boolean(localStorage.getItem('token')) || Boolean(import.meta.env.VITE_AZURE_CLIENT_ID));
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
@@ -31,9 +34,6 @@ export default function App() {
   const [aiFeatures, setAiFeatures] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Auth Inputs
-  const [emailInput, setEmailInput] = useState('');
-  const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
 
   // Notification
@@ -48,24 +48,132 @@ export default function App() {
   const saveAuth = (newToken, newUser) => {
     setToken(newToken);
     setUser(newUser);
-    localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    localStorage.setItem('token', newToken);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setToken('');
     setUser(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setCart(null);
+    setMyOrders([]);
+    setAllOrders([]);
+    setSummaryReport(null);
+    setUsersList([]);
     setActiveTab('products');
     showNotify('Logged out successfully.');
+    if (microsoftEnabled) {
+      try { await logoutMicrosoft(); }
+      catch { setAuthError('Microsoft sign-out could not complete. Please close this tab.'); }
+    }
   };
+
+  // Recheck a saved login when the page opens, including in a copied new tab.
+  useEffect(() => {
+    if (microsoftEnabled) {
+      let cancelled = false;
+      (async () => {
+        const currentToken = await getMicrosoftToken();
+        if (cancelled) return;
+        if (!currentToken) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken('');
+          setUser(null);
+          return;
+        }
+        const res = await fetch(`${API_URL}/auth/me`, {
+          headers: { Authorization: `Bearer ${currentToken}` }
+        });
+        if (!res.ok) throw new Error(`Microsoft login was rejected by the API (${res.status}).`);
+        const profile = await res.json();
+        if (cancelled) return;
+        const requestedRole = sessionStorage.getItem(REQUESTED_ROLE_KEY);
+        sessionStorage.removeItem(REQUESTED_ROLE_KEY);
+        if (requestedRole && profile.role !== requestedRole) {
+          setAuthError(`This university account is assigned ${profile.role}. Sign in with an account assigned ${requestedRole}, or choose ${profile.role} instead.`);
+          setToken('');
+          setUser(null);
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          return;
+        }
+        saveAuth(currentToken, { id: profile.id, name: profile.name, email: profile.email, role: profile.role });
+      })().catch((error) => {
+        if (!cancelled) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setToken('');
+          setUser(null);
+          setAuthError(error.message || 'Microsoft sign-in failed.');
+        }
+      }).finally(() => { if (!cancelled) setCheckingSession(false); });
+      return () => { cancelled = true; };
+    }
+    const savedToken = localStorage.getItem('token');
+    if (!savedToken) {
+      setCheckingSession(false);
+      return;
+    }
+    let cancelled = false;
+    fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${savedToken}` }
+    }).then(async (res) => {
+      if (cancelled || localStorage.getItem('token') !== savedToken) return;
+      if (!res.ok) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setToken('');
+        setUser(null);
+        setAuthError('Your session expired. Please log in again.');
+        return;
+      }
+      const profile = await res.json();
+      if (cancelled || localStorage.getItem('token') !== savedToken) return;
+      const currentUser = { id: profile.id, name: profile.name, email: profile.email, role: profile.role };
+      setUser(currentUser);
+      localStorage.setItem('user', JSON.stringify(currentUser));
+    }).catch(() => {
+      if (!cancelled && localStorage.getItem('token') === savedToken) {
+        setUser(null);
+        setAuthError('Cannot verify your session. Check the backend connection, then refresh.');
+      }
+    }).finally(() => {
+      if (!cancelled) setCheckingSession(false);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Keep other tabs in sync after a login or logout.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key === 'token') window.location.reload();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   // Helper fetch with auth
   const apiFetch = async (endpoint, options = {}) => {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (microsoftEnabled) {
+      const currentToken = await getMicrosoftToken();
+      if (!currentToken) {
+        setAuthError('Your Microsoft session ended. Please sign in again.');
+        setToken('');
+        setUser(null);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        return new Response(JSON.stringify({ error: 'Session expired' }), { status: 401 });
+      }
+      headers['Authorization'] = `Bearer ${currentToken}`;
+      if (currentToken !== token) {
+        setToken(currentToken);
+        localStorage.setItem('token', currentToken);
+      }
+    } else if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
     return res;
   };
@@ -147,24 +255,41 @@ export default function App() {
     }
   }, [token, user]);
 
-  // LOGIN FUNCTION
-  const handleLogin = async (email, password) => {
+  const handleMicrosoftLogin = async (requestedRole) => {
     setAuthError('');
+    setLoginLoading(true);
+    sessionStorage.setItem(REQUESTED_ROLE_KEY, requestedRole);
+    try { await loginWithMicrosoft(); }
+    catch (error) {
+      sessionStorage.removeItem(REQUESTED_ROLE_KEY);
+      setAuthError(error.message || 'Microsoft sign-in failed.');
+      setLoginLoading(false);
+    }
+  };
+
+  // Development login: the backend checks the entered email and password.
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setAuthError('');
+    setLoginLoading(true);
     try {
       const res = await fetch(`${API_URL}/auth/dev-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email: email.trim(), password })
       });
       const data = await res.json();
-      if (res.ok && data.token) {
+      if (res.ok && data.token && data.user) {
         saveAuth(data.token, data.user);
+        setPassword('');
         showNotify(`Welcome back, ${data.user.name} (${data.user.role})!`, 'success');
       } else {
-        setAuthError(data.error || 'Invalid credentials');
+        setAuthError(data.error || 'Login failed. Check your email and password.');
       }
     } catch {
       setAuthError('Cannot connect to backend API.');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -363,56 +488,57 @@ export default function App() {
         </div>
       )}
 
-      {/* IF NOT LOGGED IN: SHOW QUICK DEMO LOGIN CARD */}
-      {!token ? (
+      {/* Log in with credentials; verify a saved session before showing the app. */}
+      {checkingSession ? (
+        <div className="card login-card"><p>Checking your session...</p></div>
+      ) : !token || !user ? (
         <div className="card login-card">
-          <h2>Sign In to University Store</h2>
+          <h2>Sign in to University Store</h2>
           <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '20px' }}>
-            Choose a demo profile or sign in with your university credentials
+            {microsoftEnabled ? 'Use your university Microsoft account.' : 'Enter your university store account details.'}
           </p>
-
-          <div className="demo-buttons">
-            <button className="demo-btn" onClick={() => handleLogin('student@university.edu', 'Demo123!')}>
-              <span>🎓 <strong>Student Demo</strong> (Cart & Orders)</span>
-              <span className="badge badge-student">Login</span>
-            </button>
-
-            <button className="demo-btn" onClick={() => handleLogin('staff@university.edu', 'Demo123!')}>
-              <span>👔 <strong>Staff Demo</strong> (Inventory & AI Studio)</span>
-              <span className="badge badge-staff">Login</span>
-            </button>
-
-            <button className="demo-btn" onClick={() => handleLogin('admin@university.edu', 'Demo123!')}>
-              <span>🛡️ <strong>Admin Demo</strong> (Full Control & Reports)</span>
-              <span className="badge badge-admin">Login</span>
-            </button>
-          </div>
-
-          <div style={{ margin: '16px 0', borderTop: '1px solid #e2e8f0', position: 'relative' }}>
-            <span style={{ background: '#fff', padding: '0 8px', color: '#94a3b8', fontSize: '12px', position: 'relative', top: '-10px' }}>or enter credentials</span>
-          </div>
-
-          {authError && <div style={{ color: '#dc2626', fontSize: '13px', marginBottom: '12px' }}>{authError}</div>}
-
-          <form onSubmit={(e) => { e.preventDefault(); handleLogin(emailInput, passwordInput); }} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {microsoftEnabled ? (
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {['STUDENT', 'STAFF', 'ADMIN'].map((role) => (
+                <button key={role} className="btn btn-primary" type="button"
+                  onClick={() => handleMicrosoftLogin(role)} disabled={loginLoading}>
+                  {loginLoading ? 'Opening Microsoft sign-in...' : `Sign in as ${role.charAt(0) + role.slice(1).toLowerCase()}`}
+                </button>
+              ))}
+              <p style={{ color: '#64748b', fontSize: '12px', marginTop: '12px' }}>
+                Choose the role assigned to your university account. Microsoft will ask you to select an account.
+              </p>
+            </div>
+          ) : import.meta.env.PROD ? (
+            <p role="alert">University Microsoft sign-in has not been configured for this deployment.</p>
+          ) : (
+          <form onSubmit={handleLogin} style={{ display: 'grid', gap: '14px' }}>
+            <label htmlFor="login-email">Email address</label>
             <input
+              id="login-email"
+              className="search-input"
               type="email"
-              placeholder="Email address"
-              className="search-input"
-              value={emailInput}
-              onChange={e => setEmailInput(e.target.value)}
+              autoComplete="username"
               required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
             />
+            <label htmlFor="login-password">Password</label>
             <input
-              type="password"
-              placeholder="Password"
+              id="login-password"
               className="search-input"
-              value={passwordInput}
-              onChange={e => setPasswordInput(e.target.value)}
+              type="password"
+              autoComplete="current-password"
               required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
             />
-            <button type="submit" className="btn btn-primary" style={{ padding: '12px' }}>Sign In</button>
+            <button className="btn btn-primary" type="submit" disabled={loginLoading}>
+              {loginLoading ? 'Signing in...' : 'Sign in'}
+            </button>
           </form>
+          )}
+          {authError && <div role="alert" style={{ color: '#dc2626', fontSize: '13px', marginTop: '12px' }}>{authError}</div>}
         </div>
       ) : (
         /* LOGGED IN: SHOW APPLICATION NAVIGATION & VIEWS */

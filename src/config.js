@@ -8,6 +8,7 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
   DEV_LOGIN_ENABLED: z.string().default("false").transform(v => v === "true"),
+  ROLE_LOGIN_ENABLED: z.string().default("false").transform(v => v === "true"),
   AZURE_TENANT_ID: z.string().optional(), AZURE_CLIENT_ID: z.string().optional(), AZURE_AUDIENCE: z.string().optional(),
   KEY_VAULT_URL: z.string().optional(),
   KEY_VAULT_DATABASE_SECRET: z.string().default("database-url"), KEY_VAULT_JWT_SECRET: z.string().default("jwt-secret"),

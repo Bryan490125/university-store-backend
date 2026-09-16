@@ -17,6 +17,7 @@ const spec = {
     "/orders/{id}/status": { get: { summary: "Peer order status", security: [{ peerApiKey: [] }], responses: { 200: { description: "Order status" } } }, patch: { summary: "Update status (admin)", security: [{ bearerAuth: [] }], responses: { 200: { description: "Updated" } } } },
     "/admin/users": { get: { summary: "List users (admin)", security: [{ bearerAuth: [] }], responses: { 200: { description: "Users" } } } },
     "/admin/reports/summary": { get: { summary: "Dashboard report (admin)", security: [{ bearerAuth: [] }], responses: { 200: { description: "Summary" } } } },
+    "/integrations/catalog-usd": { get: { summary: "Active product prices in THB and approximate USD using a live external exchange rate", responses: { 200: { description: "Converted catalog" }, 502: { description: "Exchange rate unavailable" } } } },
     "/integrations/ai/product-description": { post: { summary: "Generate description (staff/admin)", security: [{ bearerAuth: [] }], responses: { 200: { description: "Generated text" } } } }
   }
 };

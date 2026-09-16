@@ -1,6 +1,7 @@
 require("dotenv").config();
 process.env.NODE_ENV = "test";
 process.env.DEV_LOGIN_ENABLED = "true";
+process.env.ROLE_LOGIN_ENABLED = "true";
 process.env.DATABASE_URL = process.env.DATABASE_URL || "mysql://store_user:store_password@localhost:3306/university_store";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "uortIejaqfwWZYWtmXgmHIMPHMNw4xBSF4O6v/fJLYTvuUSuqgUtELGfIi7+DLBn";
 process.env.EXPOSED_PEER_API_KEY = process.env.EXPOSED_PEER_API_KEY || "0c0bf00270a2bea199aac7c205c0567f6a4a307f0cb6d934ec7690319e9443df";
@@ -48,6 +49,15 @@ test("1. Authentication - dev-login and invalid credential rejection", async () 
     .send({ email: "admin@university.edu", password: "Demo123!" });
   assert.equal(adminLogin.status, 200);
   assert.equal(adminLogin.body.user.role, "ADMIN");
+});
+
+test("1b. Authentication - role login returns the selected role", async () => {
+  const roleLogin = await request(app)
+    .post("/store/api/auth/role-login")
+    .send({ role: "STAFF" });
+  assert.equal(roleLogin.status, 200);
+  assert.ok(roleLogin.body.token);
+  assert.equal(roleLogin.body.user.role, "STAFF");
 });
 
 test("2. RBAC - missing and invalid token rejection", async () => {

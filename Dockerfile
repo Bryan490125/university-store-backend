@@ -14,6 +14,7 @@ RUN mkdir -p /home/app/.cache && chown -R app:app /home/app
 COPY --chown=app:app --from=deps /app/node_modules ./node_modules
 COPY --chown=app:app package*.json ./
 COPY --chown=app:app prisma ./prisma
+COPY test ./test
 COPY --chown=app:app src ./src
 USER app
 EXPOSE 3000
