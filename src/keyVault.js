@@ -17,8 +17,12 @@ async function loadKeyVaultSecrets() {
   let count = 0;
   for (const [envName, secretName] of mappings) {
     if (process.env[envName]) continue;
-    const secret = await client.getSecret(secretName);
-    if (secret.value) { process.env[envName] = secret.value; count += 1; }
+    try {
+      const secret = await client.getSecret(secretName);
+      if (secret.value) { process.env[envName] = secret.value; count += 1; }
+    } catch (err) {
+      console.warn(`Key Vault notice: secret "${secretName}" not loaded (${err.message})`);
+    }
   }
   return { loaded: true, count };
 }
