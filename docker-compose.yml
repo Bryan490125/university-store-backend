@@ -13,7 +13,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    ports: ["3306:3306"]
+    ports: ["${DB_HOST_PORT:-3306}:3306"]
   api:
     build: .
     restart: unless-stopped
@@ -23,6 +23,6 @@ services:
     depends_on:
       db: { condition: service_healthy }
     command: ["sh", "-c", "npx prisma db push && node prisma/seed.js && node src/server.js"]
-    ports: ["3000:3000"]
+    ports: ["${HOST_PORT:-3000}:3000"]
 volumes:
   store_db:
